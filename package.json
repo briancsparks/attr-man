@@ -1,0 +1,26 @@
+{
+  "name": "attr-man",
+  "version": "0.1.0",
+  "description": "Attribute man",
+  "main": "attr-man.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/briancsparks/attr-man.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/briancsparks/attr-man/issues"
+  },
+  "homepage": "https://github.com/briancsparks/attr-man#readme",
+  "dependencies": {
+    "js-cluster": "0.0.2",
+    "mongodb": "^2.2.28",
+    "routes": "^2.1.0",
+    "serverassist": "https://github.com/briancsparks/serverassist/tarball/master",
+    "sgsg": "^0.9.4"
+  }
+}
