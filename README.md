@@ -1,0 +1,2 @@
+# attr-man
+Attribute collector
