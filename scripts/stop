@@ -1,0 +1,13 @@
+#!/bin/bash -e
+
+eval "$(cli-shezargs $@)"
+
+cd $script_dir
+pm2 delete udp-json
+
+cd ..
+pm2 delete attr-man
+
+cd ../server-assist-server/webtier
+pm2 delete webtier
+

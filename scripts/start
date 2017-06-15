@@ -1,0 +1,13 @@
+#!/bin/bash -e
+
+eval "$(cli-shezargs $@)"
+
+cd $script_dir
+pm2 start udp-json.js --watch -- --vverbose --main
+
+cd ..
+pm2 start attr-man.js --watch -- --vverbose --main
+
+cd ../server-assist-server/webtier
+pm2 start webtier.js --watch -- --vverbose --main
+

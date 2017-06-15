@@ -127,7 +127,7 @@ _.each(lib, (value, key) => {
   exports[key] = value;
 });
 
-if (__filename == process.argv[1]) {
+if (sg.callMain(ARGV, __filename)) {
   lib.udp2DbgTelemetry({}, {}, function(){});
 }
 
