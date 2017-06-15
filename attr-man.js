@@ -11,12 +11,13 @@ const routes                  = require('./routes/routes');
 const Router                  = require('routes');
 const MongoClient             = require('mongodb').MongoClient;
 
-const ARGV                    = sg.ARGV();
+const normlz                  = sg.normlz;
 const registerAsService       = serverassist.registerAsService;
 const registerAsServiceApp    = serverassist.registerAsServiceApp;
-const router                  = Router();
-const mongoHost               = serverassist.mongoHost;
 
+const ARGV                    = sg.ARGV();
+const router                  = Router();
+const mongoHost               = serverassist.mongoHost();
 const myIp                    = serverassist.myIp();
 
 const appName                 = 'api_dbgtelemetry';
@@ -24,8 +25,8 @@ const mount                   = 'xcc/api/v1/dbg-telemetry/';
 const rewrite                 = 'api/v1/dbg-telemetry/';
 
 const main = function() {
-  return MongoClient.connect(mongoHost(), (err, db) => {
-    if (err)      { return sg.die(err, `Could not connect to DB ${mongoUrl}`); }
+  return MongoClient.connect(mongoHost, (err, db) => {
+    if (err)      { return sg.die(err, `Could not connect to DB ${mongoHost}`); }
 
     const port      = ARGV.port || 8105;
 
@@ -35,9 +36,9 @@ const main = function() {
     };
 
     var addHandler  = function(restOfRoute, fn) {
-      addOneRoute(router, `/${rewrite}${restOfRoute}/*`, fn);
-      addOneRoute(router, `/${restOfRoute}/*`, fn);
-      addOneRoute(router, `/${mount}${restOfRoute}/*`, fn);
+      addOneRoute(router, normlz(`/${rewrite}/${restOfRoute}`), fn);
+      addOneRoute(router, normlz(`/${mount}/${restOfRoute}`), fn);
+      addOneRoute(router, normlz(`/${restOfRoute}`), fn);
     };
 
     return sg.__run([function(next) {
@@ -56,17 +57,16 @@ const main = function() {
         const host          = req.headers.host;
         const route         = router.match(pathname);
 
-        return sg.getBody(req, () => {
-          if (route && _.isFunction(route.fn)) {
-            return route.fn(req, res, route.params, route.splats, url.query, route);
-          } else {
-
-            // Did not match the route to any handler
-            res.statusCode  = 404;
-            resPayload      = `404 - Not Found: ${host} / ${pathname}`;
-          }
-
+        // Do we have a route?
+        if (!route || !_.isFunction(route.fn)) {
+          res.statusCode  = 404;
+          resPayload      = `404 - Not Found: ${host} / ${pathname}`;
           res.end(resPayload+'\n');
+          return;
+        }
+
+        return sg.getBody(req, () => {
+          return route.fn(req, res, route.params, route.splats, url.query, route);
         });
       });
 
