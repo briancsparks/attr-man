@@ -103,7 +103,7 @@ lib.udp2DbgTelemetry = function(argv, context, callback) {
   };
 
   uploadSession = function(sessionId, callback_) {
-console.error(`uploadSession: ${sessionId}`);
+    //console.log(`uploadSession: ${sessionId}`);
     const callback  = callback_ || function(){};
     const session   = sessions[sessionId];
     const endpoint  = normlz(`${telemEndpoint}`);
