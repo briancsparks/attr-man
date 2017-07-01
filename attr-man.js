@@ -34,7 +34,7 @@ const router                  = Router();
 const mongoHost               = serverassist.mongoHost();
 const myIp                    = serverassist.myIp();
 
-const appName                 = 'api_dbgtelemetry';
+const appName                 = 'xcc_dbgtelemetry';
 const mount                   = 'xcc/api/v1/dbg-telemetry/';
 const rewrite                 = 'api/v1/dbg-telemetry/';
 

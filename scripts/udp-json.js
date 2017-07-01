@@ -79,7 +79,7 @@ lib.udp2DbgTelemetry = function(argv, context, callback) {
   sendPayload = function(body, rinfo, callback_) {
     var callback = callback_ || function(){};
 
-    verbose(2, `From ${rinfo.address}:${rinfo.port}`, body);
+    verbose(3, `From ${rinfo.address}:${rinfo.port}`, body);
 
     if (!body || !body.payload)           { return callback(sg.toError('ENOPAYLOAD')); }
 
