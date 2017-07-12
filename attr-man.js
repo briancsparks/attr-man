@@ -17,7 +17,8 @@
 
 const sg                      = require('sgsg');
 const _                       = sg._;
-const serverassist            = require('serverassist');
+//const serverassist            = require('serverassist');
+const serverassist            = require('../serverassist');
 const http                    = require('http');
 const urlLib                  = require('url');
 const routes                  = require('./routes/routes');
@@ -34,9 +35,9 @@ const router                  = Router();
 const mongoHost               = serverassist.mongoHost();
 const myIp                    = serverassist.myIp();
 
-const appName                 = 'xcc_dbgtelemetry';
-const mount                   = 'xcc/api/v1/dbg-telemetry/';
-const rewrite                 = 'api/v1/dbg-telemetry/';
+const appName                 = 'sa_dbgtelemetry';
+const mount                   = 'sa/api/v1/dbg-telemetry/';
+const projectId               = 'sa';
 
 const main = function() {
   return MongoClient.connect(mongoHost, (err, db) => {
@@ -50,9 +51,7 @@ const main = function() {
     };
 
     var addHandler  = function(restOfRoute, fn) {
-      addOneRoute(router, normlz(`/${rewrite}/${restOfRoute}`), fn);
       addOneRoute(router, normlz(`/${mount}/${restOfRoute}`), fn);
-      addOneRoute(router, normlz(`/${restOfRoute}`), fn);
     };
 
     return sg.__run([function(next) {
@@ -91,7 +90,7 @@ const main = function() {
       server.listen(port, myIp, () => {
         verbose(2, `${appName} running at http://${myIp}:${port}/`);
 
-        registerAsServiceApp(appName, mount, {rewrite});
+        registerAsServiceApp(appName, mount, {projectId});
 
         registerMyService();
         function registerMyService() {
