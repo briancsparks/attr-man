@@ -90,7 +90,7 @@ const main = function() {
       server.listen(port, myIp, () => {
         verbose(2, `${appName} running at http://${myIp}:${port}/`);
 
-        registerAsServiceApp(appName, mount, {projectId});
+        registerAsServiceApp(appName, mount, {projectId, subdomain:'.'});
 
         registerMyService();
         function registerMyService() {
