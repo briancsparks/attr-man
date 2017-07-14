@@ -19,7 +19,7 @@ const verbose           = sg.verbose;
 
 var lib = {};
 
-lib.udp2DbgTelemetry = function(argv, context, callback) {
+var udp2DbgTelemetry = function(argv, context, callback) {
   const telemFqdn     = argvGet(argv, 'fqdn')                 || 'local.mobilewebassist.net';
   const telemVer      = argvGet(argv, 'version,v')            || 'v1';
   const telemRoute    = argvGet(argv, 'route')                || normlz(`/sa/api/${telemVer}/dbg-telemetry/upload/`);
@@ -170,7 +170,7 @@ _.each(lib, (value, key) => {
 });
 
 if (sg.callMain(ARGV, __filename)) {
-  lib.udp2DbgTelemetry({}, {}, function(){});
+  udp2DbgTelemetry(ARGV.getParams({}), {}, function(){});
 }
 
 
