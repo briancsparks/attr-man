@@ -9,6 +9,7 @@
  */
 const sg                = require('sgsg');
 const _                 = sg._;
+const helpers           = require('../helpers');
 const dgram             = require('dgram');
 const request           = sg.extlibs.superagent;
 
@@ -16,6 +17,8 @@ const ARGV              = sg.ARGV();
 const normlz            = sg.normlz;
 const argvGet           = sg.argvGet;
 const verbose           = sg.verbose;
+const fetch             = helpers.fetch;
+const setPrefix         = helpers.setPrefix;
 
 var lib = {};
 
@@ -121,7 +124,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   uploadSession = function(sessionId, callback_) {
     const callback      = callback_ || function(){};
     const sessionFlow   = sg.deepCopy(sessionFlows[sessionId]);
-    const endpoint      = normlz(`${telemEndpoint}`);
+    const urlPath       = '/dbg-telemetry/upload/';
     var   body          = {sessionId};
 
     uploadTimer         = null;
@@ -131,26 +134,11 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       body.payload = sessionFlow;
 
       //console.log(`Uploading sessionFlow ${sessionId}, length: ${sessionFlow.length}, endpoint: ${endpoint}`);
+      return fetch(urlPath, body, function(err, result) {
+        if (err)  { return callback(err); }
 
-      // Must use curl to traverse proxy
-      if (!telemFqdn.startsWith('local') && process.env.http_proxy) {
-        sg.exec('curl', ['-s', endpoint, '-d', JSON.stringify(body)], function(error, exitCode, stdoutChunks, stderrChunks, signal) {
-          //console.log(`curl(${exitCode};${signal})`, error);
-          //console.log(stdoutChunks.join(''));
-          //console.log(stderrChunks.join(''));
-          return callback();
-        });
-      } else {
-        request.post(endpoint)
-            .send(body).accept('json')
-            .end((err, res) => {
-
-              // Put the data into the 'historical' session object
-              sessions[sessionId] = (sessions[sessionId] || []).concat(sessionFlow);
-
-              return callback.apply(this, arguments);
-            });
-      }
+        return callback(null, result);
+      });
     }
   };
 
@@ -158,6 +146,16 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   server.on('listening', () => {
     const address = server.address();
     console.log(`UDP server listening on ${address.address}:${address.port}; sending to ${telemFqdn}`);
+
+    setPrefix(`http://hq.${telemFqdn}/sa/`);
+
+    const body      = {partnerId:"HP_SA_SERVICE", version:1};
+    const urlPath   = '/clientStart/?clientId=asdf';
+    return fetch(urlPath, body, function(err, result) {
+      if (err) { console.error(err); return; }
+
+      setPrefix(result.upstream);
+    });
   });
 
   // Cleanup if we have an error
