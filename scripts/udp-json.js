@@ -131,22 +131,33 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       body.payload = sessionFlow;
 
       //console.log(`Uploading sessionFlow ${sessionId}, length: ${sessionFlow.length}, endpoint: ${endpoint}`);
-      request.post(endpoint)
-          .send(body).accept('json')
-          .end((err, res) => {
 
-            // Put the data into the 'historical' session object
-            sessions[sessionId] = (sessions[sessionId] || []).concat(sessionFlow);
+      // Must use curl to traverse proxy
+      if (!telemFqdn.startsWith('local') && process.env.http_proxy) {
+        sg.exec('curl', ['-s', endpoint, '-d', JSON.stringify(body)], function(error, exitCode, stdoutChunks, stderrChunks, signal) {
+          //console.log(`curl(${exitCode};${signal})`, error);
+          //console.log(stdoutChunks.join(''));
+          //console.log(stderrChunks.join(''));
+          return callback();
+        });
+      } else {
+        request.post(endpoint)
+            .send(body).accept('json')
+            .end((err, res) => {
 
-            return callback.apply(this, arguments);
-          });
+              // Put the data into the 'historical' session object
+              sessions[sessionId] = (sessions[sessionId] || []).concat(sessionFlow);
+
+              return callback.apply(this, arguments);
+            });
+      }
     }
   };
 
   // Message when we are listening
   server.on('listening', () => {
     const address = server.address();
-    console.log(`UDP server listening on ${address.address}:${address.port}`);
+    console.log(`UDP server listening on ${address.address}:${address.port}; sending to ${telemFqdn}`);
   });
 
   // Cleanup if we have an error
