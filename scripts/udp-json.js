@@ -2,6 +2,9 @@
 /**
  *  Listen on UDP --port for JSON; send the JSON to a dbg-telemetry web service.
  *
+ *      --port  - The port on which to listen
+ *      --fqdn  - The FQDN (domain name) of the HQ server
+ *
  *  There is one dgram socket listener, which will receive one JSON telemetry object
  *  per recv, and parse it. It then sends the JSON to a `send` function. The send
  *  function queues the JSON, and uploads it to the dbg-telemetry service every

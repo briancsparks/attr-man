@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/briancsparks/attr-man#readme",
   "dependencies": {
+    "getmac": "^1.2.1",
     "js-cluster": "^0.1.2",
     "mongodb": "^2.2.28",
     "routes": "^2.1.0",
