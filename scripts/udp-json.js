@@ -26,18 +26,18 @@ const setPrefix         = helpers.setPrefix;
 var lib = {};
 
 var udp2DbgTelemetry = function(argv, context, callback) {
-  const telemFqdn     = argvGet(argv, 'fqdn')                 || 'local.mobilewebassist.net';
-  const telemVer      = argvGet(argv, 'version,v')            || 'v1';
-  const telemRoute    = argvGet(argv, 'route')                || normlz(`/sa/api/${telemVer}/dbg-telemetry/upload/`);
-  const telemEndpoint = argvGet(argv, 'endpoint')             || normlz(`http://${telemFqdn}/${telemRoute}`);
-  const udpPort       = argvGet(argv, 'udp-port,port')        || 50505;
-  const upTimeout     = argvGet(argv, 'upload-timeout,to')    || 1000;
-  const upMaxCount    = argvGet(argv, 'upload-max,max')       || 15;
-  const defSessionId  = argvGet(argv, 'session-id')           || 'session_'+_.now()
+  const telemetryFqdn     = argvGet(argv, 'fqdn')                 || 'hq.mobilewebassist.net';
+  const telemetryVer      = argvGet(argv, 'version,v')            || 'v1';
+  const telemetryRoute    = argvGet(argv, 'route')                || normlz(`/sa/api/${telemetryVer}/dbg-telemetry/upload/`);
+  const telemetryEndpoint = argvGet(argv, 'endpoint')             || normlz(`http://${telemetryFqdn}/${telemetryRoute}`);
+  const udpPort           = argvGet(argv, 'udp-port,port')        || 50505;
+  const upTimeout         = argvGet(argv, 'upload-timeout,to')    || 1000;
+  const upMaxCount        = argvGet(argv, 'upload-max,max')       || 15;
+  const defSessionId      = argvGet(argv, 'session-id')           || 'session_'+_.now()
 
   var   sendPayload;
-  var   sessions      = {};
-  var   sessionFlows  = {};
+  var   sessions          = {};
+  var   sessionFlows      = {};
 
   //---------------------------------------------------------
   // Listen on UDP and upload incoming
@@ -148,9 +148,9 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   // Message when we are listening
   server.on('listening', () => {
     const address = server.address();
-    console.log(`UDP server listening on ${address.address}:${address.port}; sending to ${telemFqdn}`);
+    console.log(`UDP server listening on ${address.address}:${address.port}; sending to ${telemetryFqdn}`);
 
-    setPrefix(`http://hq.${telemFqdn}/sa/`);
+    setPrefix(`http://hq.${telemetryFqdn}/sa/`);
 
     const body      = {partnerId:"HP_SA_SERVICE", version:1};
     const urlPath   = '/clientStart/?clientId=asdf';
@@ -184,5 +184,3 @@ _.each(lib, (value, key) => {
 if (sg.callMain(ARGV, __filename)) {
   udp2DbgTelemetry(ARGV.getParams({}), {}, function(){});
 }
-
-
