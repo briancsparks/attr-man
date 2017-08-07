@@ -31,6 +31,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   const udpPort           = argvGet(argv, 'udp-port,port')        || 50505;
   const upTimeout         = argvGet(argv, 'upload-timeout,to')    || 1000;
   const upMaxCount        = argvGet(argv, 'upload-max,max')       || 15;
+  const clientPrefix      = argvGet(argv, 'client-prefix,pre');
   const defSessionId      = argvGet(argv, 'session-id')           || 'session_'+_.now()
 
   var   serverassist;
@@ -58,12 +59,16 @@ var udp2DbgTelemetry = function(argv, context, callback) {
         csOptions = sg.extend(csOptions, {clientId: hardwareId});
       }
 
+      if (clientPrefix && csOptions.clientId) {
+        csOptions.clientId = `${clientPrefix}-${csOptions.clientId}`;
+      }
+
       const localServerassist = clientStart(csOptions, function(err, config) {
-        //console.log('clientStart:', csOptions, err, config, serverassist);
         if (sg.ok(err)) {
           serverassist = localServerassist;
           console.log(`Sucessfully got startup info from ${serverassist.upstreams.sa_hq}`)
         }
+        //console.log('clientStart:', csOptions, err, config, serverassist);
       });
     });
 
