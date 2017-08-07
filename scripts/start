@@ -2,15 +2,12 @@
 
 eval "$(cli-shezargs $@)"
 
-cd $script_dir
-pm2 start udp-json.js --watch -- --vverbose --main
-
-cd ..
+cd $script_dir/..
 pm2 start attr-man.js --watch -- --vverbose --main
+pm2 start udp-json.js --watch -- --vverbose --main
 
 cd ../server-assist-server/hq
 pm2 start hq.js --watch -- --vverbose --main
 
 cd ../server-assist-server/webtier
 pm2 start webtier.js --watch -- --vverbose --main
-

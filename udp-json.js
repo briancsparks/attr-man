@@ -10,31 +10,30 @@
  *  function queues the JSON, and uploads it to the dbg-telemetry service every
  *  so often.
  */
-const sg                = require('sgsg');
-const _                 = sg._;
-const helpers           = require('../helpers');
-const dgram             = require('dgram');
-const request           = sg.extlibs.superagent;
+const sg                      = require('sgsg');
+const _                       = sg._;
+const serverassistLib         = sg.include('serverassist') || require('serverassist');
+const dgram                   = require('dgram');
+const request                 = sg.extlibs.superagent;
 
-const ARGV              = sg.ARGV();
-const normlz            = sg.normlz;
-const argvGet           = sg.argvGet;
-const verbose           = sg.verbose;
-const fetch             = helpers.fetch;
-const setPrefix         = helpers.setPrefix;
+const ARGV                    = sg.ARGV();
+const normlz                  = sg.normlz;
+const argvGet                 = sg.argvGet;
+const verbose                 = sg.verbose;
+const clientStart             = serverassistLib.client.clientStart;
+
+const partnerId               = 'HP_SA_SERVICE';
+const version                 = 1;
 
 var lib = {};
 
 var udp2DbgTelemetry = function(argv, context, callback) {
-  const telemetryFqdn     = argvGet(argv, 'fqdn')                 || 'hq.mobilewebassist.net';
-  const telemetryVer      = argvGet(argv, 'version,v')            || 'v1';
-  const telemetryRoute    = argvGet(argv, 'route')                || normlz(`/sa/api/${telemetryVer}/dbg-telemetry/upload/`);
-  const telemetryEndpoint = argvGet(argv, 'endpoint')             || normlz(`http://${telemetryFqdn}/${telemetryRoute}`);
   const udpPort           = argvGet(argv, 'udp-port,port')        || 50505;
   const upTimeout         = argvGet(argv, 'upload-timeout,to')    || 1000;
   const upMaxCount        = argvGet(argv, 'upload-max,max')       || 15;
   const defSessionId      = argvGet(argv, 'session-id')           || 'session_'+_.now()
 
+  var   serverassist;
   var   sendPayload;
   var   sessions          = {};
   var   sessionFlows      = {};
@@ -45,6 +44,34 @@ var udp2DbgTelemetry = function(argv, context, callback) {
 
   const server = dgram.createSocket('udp4');
 
+  /**
+   *  Once we are listening for the magic UDP packets, get our upstream
+   *  information from the HQ server.
+   */
+  server.on('listening', () => {
+    const address = server.address();
+    console.log(`UDP server listening on ${address.address}:${address.port}`);
+
+    var csOptions = sg.extend({partnerId}, {version});
+    return sg.getHardwareId((err, hardwareId) => {
+      if (sg.ok(err, hardwareId)) {
+        csOptions = sg.extend(csOptions, {clientId: hardwareId});
+      }
+
+      const localServerassist = clientStart(csOptions, function(err, config) {
+        //console.log('clientStart:', csOptions, err, config, serverassist);
+        if (sg.ok(err)) {
+          serverassist = localServerassist;
+          console.log(`Sucessfully got startup info from ${serverassist.upstreams.sa_hq}`)
+        }
+      });
+    });
+
+  });
+
+  /**
+   *  Handle the UDP packet.
+   */
   server.on('message', (msg_, rinfo) => {
 
     const socket = `${rinfo.address}:${rinfo.port}`;
@@ -100,34 +127,44 @@ var udp2DbgTelemetry = function(argv, context, callback) {
     // Have we collected enough?
     if (sessionFlow.length >= upMaxCount) {
       verbose(2, `Flushing ${sessionId}, count: ${sessionFlow.length}`);
-      verbose(3, `Flushing ${sessionId}, count: ${sessionFlow.length}`, payload, sessionFlow);
 
       if (uploadTimer) {
         clearTimeout(uploadTimer);
         uploadTimer = null;
       }
 
-      return uploadSession(sessionId, callback);
+      return uploadSession(sessionId, err => {
+        if (err && err.name === 'ENOUPSTREAM') { return uploadViaTimer(); }
+
+        return callback(err, ..._.rest(arguments));
+      });
     }
 
     /* otherwise -- let data accumulate for a while */
+    uploadViaTimer();
+    function uploadViaTimer() {
+      // If we have a timer, that means someone is already going to call uploadSession once the timer fires.
+      if (!uploadTimer) {
+        uploadTimer = sg.setTimeout(upTimeout, () => {
+          verbose(2, `Timeout-Flushing ${sessionId}, count: ${sessionFlows[sessionId].length}`);
 
-    // If we have a timer, that means someone is already going to call uploadSession once the timer fires.
-    if (!uploadTimer) {
-      uploadTimer = setTimeout(() => {
-        verbose(2, `Timeout-Flushing ${sessionId}, count: ${sessionFlows[sessionId].length}`);
-        verbose(3, `Timeout-Flushing ${sessionId}, count: ${sessionFlows[sessionId].length}`, payload, sessionFlows[sessionId]);
+          uploadTimer = null;
+          uploadSession(sessionId, err => {
+            if (err && err.name === 'ENOUPSTREAM') { return sg.setTimeout(100, uploadViaTimer); }
 
-        uploadTimer = null;
-        uploadSession(sessionId, callback);
-      }, upTimeout);
+            return callback(err, ..._.rest(arguments));
+          });
+        });
+      }
     }
   };
 
   uploadSession = function(sessionId, callback_) {
     const callback      = callback_ || function(){};
+
+    if (!serverassist) { return callback(sg.toError('ENOUPSTREAM')); }
+
     const sessionFlow   = sg.deepCopy(sessionFlows[sessionId]);
-    const urlPath       = '/dbg-telemetry/upload/';
     var   body          = {sessionId};
 
     uploadTimer         = null;
@@ -136,30 +173,14 @@ var udp2DbgTelemetry = function(argv, context, callback) {
     if (sessionFlow) {
       body.payload = sessionFlow;
 
-      //console.log(`Uploading sessionFlow ${sessionId}, length: ${sessionFlow.length}, endpoint: ${endpoint}`);
-      return fetch(urlPath, body, function(err, result) {
+      verbose(3, `Uploading sessionFlow ${sessionId}, length: ${sessionFlow.length}`);
+      return serverassist.POST('sa_dbgtelemetry', '/upload/', /*query=*/ {}, body, function(err, result) {
         if (err)  { return callback(err); }
 
         return callback(null, result);
       });
     }
   };
-
-  // Message when we are listening
-  server.on('listening', () => {
-    const address = server.address();
-    console.log(`UDP server listening on ${address.address}:${address.port}; sending to ${telemetryFqdn}`);
-
-    setPrefix(`http://hq.${telemetryFqdn}/sa/`);
-
-    const body      = {partnerId:"HP_SA_SERVICE", version:1};
-    const urlPath   = '/clientStart/?clientId=asdf';
-    return fetch(urlPath, body, function(err, result) {
-      if (err) { console.error(err); return; }
-
-      setPrefix(result.upstream);
-    });
-  });
 
   // Cleanup if we have an error
   server.on('error', (err) => {

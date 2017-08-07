@@ -17,8 +17,7 @@
 
 const sg                      = require('sgsg');
 const _                       = sg._;
-//const serverassist            = require('serverassist');
-const serverassist            = require('../serverassist');
+const serverassist            = sg.include('serverassist') || require('serverassist');
 const http                    = require('http');
 const urlLib                  = require('url');
 const routes                  = require('./routes/routes');
