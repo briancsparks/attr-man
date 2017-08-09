@@ -31,7 +31,7 @@ lib.addRoutes = function(db, addHandler, callback) {
    */
   addHandler('/upload/*', handlers.upload = function(req, res, params, splats, query) {
     var   result    = {count:0, attrCount:0};
-    const origAll   = JSON.stringify(sg.extend(req.bodyJson || {}, params || {}, query || {}));
+    const origAll   = sg.deepCopy(sg.extend(req.bodyJson || {}, params || {}, query || {}));
 
     const body      = sg.extend(req.bodyJson || {});
     const payload   = sg.extract(body, 'payload');
@@ -42,7 +42,33 @@ lib.addRoutes = function(db, addHandler, callback) {
     //console.log({sessionId, clientId, all, splats, payload});
 
     var sessionData   = data[sessionId]         = data[sessionId]         || {};
-    var sessionItems  = itemsForS3[sessionId]   = itemsForS3[sessionId]   || [];
+    var sessionItems  = itemsForS3[sessionId]   = itemsForS3[sessionId]   || {count:0, ctime:_.now(), mtime:_.now()};
+
+    sessionItems.payload = [...(sessionItems.payload || []), ...(origAll.payload || [])];
+    _.each(_.keys(_.omit(origAll, 'payload', 'count')), (key) => {
+      sessionItems[key] = sg.addToSet(origAll[key], (sessionItems[key] || []));
+    });
+    sessionItems.count += 1;
+    sessionItems.mtime  = _.now();
+
+    //// Add back in to see accumulation of sessionItems
+    //var silog = sg.deepCopy(sessionItems);
+    //silog.payload = silog.payload.length;
+    //console.error('si', silog, _.keys(origAll));
+
+    // Put into s3
+    (function() {
+      var params = {
+        Body:         JSON.stringify(sessionItems),
+        Bucket:       'sa-telemetry-netlab-asis',
+        Key:          sessionId,
+        ContentType:  'application/json'
+      };
+
+      return s3.putObject(params, (err, data) => {
+        console.log(`added ${sessionItems.payload.length} to S3:`, err, data);
+      });
+    }());
 
     // key/values that should be put onto all items
     var kvAll       = {sessionId, clientId};
@@ -50,8 +76,6 @@ lib.addRoutes = function(db, addHandler, callback) {
     _.each(payload, (payloadItem_) => {
       const payloadItem = sg.extend(payloadItem_, kvAll);
       verbose(3, `payload item`, payloadItem);
-
-      sessionItems.push(payloadItem);
 
       result.count += 1;
 
@@ -72,23 +96,6 @@ lib.addRoutes = function(db, addHandler, callback) {
         result.attrCount += 1;
       });
     });
-
-    verbose(3, `session items:`, sessionItems);
-
-    // Put into s3
-    (function() {
-      var params = {
-        Body:         origAll,
-        //Body:         JSON.stringify(sessionItems),
-        Bucket:       'sa-telemetry-netlab-asis',
-        Key:          sessionId,
-        ContentType:  'application/json'
-      };
-
-      return s3.putObject(params, (err, data) => {
-        console.log(`added to S3:`, err, data);
-      });
-    }());
 
     result.ok       = true;
     verbose(3, `Received: ${sessionId}:`, result);
