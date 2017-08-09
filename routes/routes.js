@@ -9,6 +9,7 @@
  */
 const sg                  = require('sgsg');
 const _                   = sg._;
+const AWS                 = require('aws-sdk');
 
 const setOnn              = sg.setOnn;
 const verbose             = sg.verbose;
@@ -17,29 +18,40 @@ const inspect             = sg.inspectFlat;
 var lib = {};
 
 lib.addRoutes = function(db, addHandler, callback) {
-  var handlers = {}, watchers = {}, data = {};
+  var handlers    = {}, watchers = {}, data = {};
+  var uploads     = {};
+  var itemsForS3  = {};
 
   var attrMan = db.collection('attributeMan');
+
+  const s3 = new AWS.S3();
 
   /**
    *  /upload handler
    */
   addHandler('/upload/*', handlers.upload = function(req, res, params, splats, query) {
     var   result    = {count:0, attrCount:0};
+    const origAll   = JSON.stringify(sg.extend(req.bodyJson || {}, params || {}, query || {}));
+
     const body      = sg.extend(req.bodyJson || {});
     const payload   = sg.extract(body, 'payload');
     const all       = sg.extend(body || {}, params || {}, query ||{});
     const sessionId = sg.extract(all, 'sessionId') || 'defSession';
+    const clientId  = sg.extract(all, 'clientId');
 
-    //console.log({all, splats, payload});
+    //console.log({sessionId, clientId, all, splats, payload});
 
-    var sessionData = data[sessionId] = data[sessionId] || {};
+    var sessionData   = data[sessionId]         = data[sessionId]         || {};
+    var sessionItems  = itemsForS3[sessionId]   = itemsForS3[sessionId]   || [];
 
     // key/values that should be put onto all items
-    var kvAll = {sessionId};
+    var kvAll       = {sessionId, clientId};
 
     _.each(payload, (payloadItem_) => {
       const payloadItem = sg.extend(payloadItem_, kvAll);
+      verbose(3, `payload item`, payloadItem);
+
+      sessionItems.push(payloadItem);
 
       result.count += 1;
 
@@ -61,9 +73,26 @@ lib.addRoutes = function(db, addHandler, callback) {
       });
     });
 
+    verbose(3, `session items:`, sessionItems);
+
+    // Put into s3
+    (function() {
+      var params = {
+        Body:         origAll,
+        //Body:         JSON.stringify(sessionItems),
+        Bucket:       'sa-telemetry-netlab-asis',
+        Key:          sessionId,
+        ContentType:  'application/json'
+      };
+
+      return s3.putObject(params, (err, data) => {
+        console.log(`added to S3:`, err, data);
+      });
+    }());
+
     result.ok       = true;
     verbose(3, `Received: ${sessionId}:`, result);
-    console.log(inspect({received: sessionId, result}));
+    console.log(inspect({sessionId, result}));
 
     res.statusCode  = 200;
     res.setHeader('Content-Type', 'application/json');
@@ -104,4 +133,89 @@ _.each(lib, (value, key) => {
   exports[key] = value;
 });
 
+
+//    const uploadPart = function(PartNumber, UploadId, callback) {
+//      const params = {
+//        PartNumber,
+//        UploadId,
+//        Body:   origAll,
+//        Bucket: 'sa-telemetry-netlab',
+//        Key:    sessionId
+//      };
+//
+//      return s3.uploadPart(params, (err, data) => {
+//        console.log('sent', err, data);
+//        if (sg.ok(err, data)) {
+//          uploads[sessionId].etags[PartNumber] = data.ETag;
+//        }
+//        return callback(err, data);
+//      });
+//    };
+//
+//    const waitForCloseout = function(UploadId) {
+//      const wait2 = function() {
+//        console.log('Still waiting for closeout', _.now() - uploads[sessionId].finishTime);
+//        if (_.now() < uploads[sessionId].finishTime) { return sg.setTimeout(3000, wait2); }
+//
+//        // Close it
+//        const params = {
+//          Bucket: 'sa-telemetry-netlab',
+//          Key:    sessionId,
+//          UploadId,
+//          MultipartUpload: { Parts: _.map(uploads[sessionId].etags, (etag, index) => {
+//            return {ETag: etag, PartNumber: index};
+//          })}
+//        };
+//
+//        params.MultipartUpload.Parts.shift();
+//
+//        console.log('comp:', sg.inspect(params));
+//        return s3.completeMultipartUpload(params, (err, data) => {
+//          console.log('complete', err, data);
+//        });
+//      };
+//      wait2();
+//    };
+//
+//    const uploadToS3 = function() {
+//      if (!uploads[sessionId]) {
+//        uploads[sessionId] = {sessionId, finishTime:_.now()+12000, partNum:1, etags:['xyz']};
+//
+//        // I have to create the multipart upload
+//        const params = {Bucket: 'sa-telemetry-netlab', Key: sessionId};
+//        return s3.createMultipartUpload(params, (err, data) => {
+//          if (!sg.ok(err, data)) {
+//            uploads[sessionId].dead = true;
+//            return;
+//          }
+//
+//          /* otherwise */
+//          console.log(`created: ${data.UploadId}, ${data.Bucket}, ${data.Key}`);
+//          uploads[sessionId].uploadId = data.UploadId;
+//
+//          // Now, actually upload the data
+//          return uploadPart(1, data.UploadId, (err) => {
+//            return waitForCloseout(data.UploadId);
+//          });
+//        });
+//      }
+//
+//      if (uploads[sessionId].dead) { return; }
+//      const myPartNum = ++uploads[sessionId].partNum;
+//
+//      const upload2 = function() {
+//        if (!uploads[sessionId].uploadId) {
+//          // The AWS multipart upload is not yet created, wait for it
+//          console.log('-- still waiting for create');
+//          return sg.setTimeout(1000, upload2);
+//        }
+//
+//        // We have created the upload object, fire away
+//        return uploadPart(myPartNum, uploads[sessionId].uploadId, (err) => {
+//          console.log(err);
+//        });
+//      };
+//      upload2();
+//    };
+//    uploadToS3();
 
