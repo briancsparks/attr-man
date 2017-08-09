@@ -1,0 +1,12 @@
+#!/bin/bash -e
+
+
+curl -ks 'https://hq.mobilewebassist.net/sa/clientStart' -d '{"partnerId":"HP_SA_SERVICE","version":1,"rsvr":"hqqa"}' > /tmp/watcher.json
+upstream="$(cat /tmp/watcher.json | jq -r '.upstreams.sa_dbgtelemetry')"
+echo $upstream
+
+for ((i=0; i<25; ++i)); do
+  if ! curl -skL "$upstream/watch/" | tee /tmp/watch-data-${i}.json | jq '.items | .[] | select(.key=="MDL") | {who, when, key, value}'; then
+    cat /tmp/watch-data-${i}.json
+  fi
+done
