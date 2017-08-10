@@ -58,10 +58,24 @@ lib.addRoutes = function(db, addHandler, callback) {
 
     // Put into s3
     (function() {
+      var uploadData = {
+        sessionId   : sessionItems.sessionId[0],
+        clientId    : sessionItems.clientId[0],
+        sessionIds  : sessionItems.sessionId,
+        clientIds   : sessionItems.clientId
+      };
+
+      uploadData = sg.reduce(_.keys(_.omit(sessionItems, 'sessionId', 'clientId', 'payload')), uploadData, (m, key) => {
+        return sg.kv(m, key, sessionItems[key]);
+      });
+
+      uploadData.elapsed = uploadData.mtime - uploadData.ctime;
+      uploadData.payload = sessionItems.payload;
+
       var params = {
-        Body:         JSON.stringify(sessionItems),
-        Bucket:       'sa-telemetry-netlab-asis',
-        Key:          sessionId,
+        Body:         JSON.stringify(uploadData),
+        Bucket:       bucketName(),
+        Key:          `${sessionId}.json`,
         ContentType:  'application/json'
       };
 
@@ -140,89 +154,11 @@ _.each(lib, (value, key) => {
   exports[key] = value;
 });
 
+function bucketName() {
+  if (sg.isProduction()) {
+    return 'sa-telemetry-netlab-asis-pub';
+  }
 
-//    const uploadPart = function(PartNumber, UploadId, callback) {
-//      const params = {
-//        PartNumber,
-//        UploadId,
-//        Body:   origAll,
-//        Bucket: 'sa-telemetry-netlab',
-//        Key:    sessionId
-//      };
-//
-//      return s3.uploadPart(params, (err, data) => {
-//        console.log('sent', err, data);
-//        if (sg.ok(err, data)) {
-//          uploads[sessionId].etags[PartNumber] = data.ETag;
-//        }
-//        return callback(err, data);
-//      });
-//    };
-//
-//    const waitForCloseout = function(UploadId) {
-//      const wait2 = function() {
-//        console.log('Still waiting for closeout', _.now() - uploads[sessionId].finishTime);
-//        if (_.now() < uploads[sessionId].finishTime) { return sg.setTimeout(3000, wait2); }
-//
-//        // Close it
-//        const params = {
-//          Bucket: 'sa-telemetry-netlab',
-//          Key:    sessionId,
-//          UploadId,
-//          MultipartUpload: { Parts: _.map(uploads[sessionId].etags, (etag, index) => {
-//            return {ETag: etag, PartNumber: index};
-//          })}
-//        };
-//
-//        params.MultipartUpload.Parts.shift();
-//
-//        console.log('comp:', sg.inspect(params));
-//        return s3.completeMultipartUpload(params, (err, data) => {
-//          console.log('complete', err, data);
-//        });
-//      };
-//      wait2();
-//    };
-//
-//    const uploadToS3 = function() {
-//      if (!uploads[sessionId]) {
-//        uploads[sessionId] = {sessionId, finishTime:_.now()+12000, partNum:1, etags:['xyz']};
-//
-//        // I have to create the multipart upload
-//        const params = {Bucket: 'sa-telemetry-netlab', Key: sessionId};
-//        return s3.createMultipartUpload(params, (err, data) => {
-//          if (!sg.ok(err, data)) {
-//            uploads[sessionId].dead = true;
-//            return;
-//          }
-//
-//          /* otherwise */
-//          console.log(`created: ${data.UploadId}, ${data.Bucket}, ${data.Key}`);
-//          uploads[sessionId].uploadId = data.UploadId;
-//
-//          // Now, actually upload the data
-//          return uploadPart(1, data.UploadId, (err) => {
-//            return waitForCloseout(data.UploadId);
-//          });
-//        });
-//      }
-//
-//      if (uploads[sessionId].dead) { return; }
-//      const myPartNum = ++uploads[sessionId].partNum;
-//
-//      const upload2 = function() {
-//        if (!uploads[sessionId].uploadId) {
-//          // The AWS multipart upload is not yet created, wait for it
-//          console.log('-- still waiting for create');
-//          return sg.setTimeout(1000, upload2);
-//        }
-//
-//        // We have created the upload object, fire away
-//        return uploadPart(myPartNum, uploads[sessionId].uploadId, (err) => {
-//          console.log(err);
-//        });
-//      };
-//      upload2();
-//    };
-//    uploadToS3();
+  return 'sa-telemetry-netlab-asis-test';
+}
 
