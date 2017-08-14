@@ -7,18 +7,39 @@
  *             as multiple response bodies.
  *
  */
-const sg                  = require('sgsg');
-const _                   = sg._;
-const AWS                 = require('aws-sdk');
+const sg                      = require('sgsg');
+const _                       = sg._;
+const serverassist            = sg.include('serverassist') || require('serverassist');
+//const clusterLib              = sg.include('js-cluster')   || require('js-cluster');
+//const clusterConfig           = require('../../ra-scripts/cluster-config');
+const AWS                     = require('aws-sdk');
 
-const setOnn              = sg.setOnn;
-const verbose             = sg.verbose;
-const inspect             = sg.inspectFlat;
+const setOnn                  = sg.setOnn;
+const verbose                 = sg.verbose;
+const inspect                 = sg.inspectFlat;
+const registerAsService       = serverassist.registerAsService;
+const registerAsServiceApp    = serverassist.registerAsServiceApp;
+
+const appId                   = 'sa_dbgtelemetry';
+const mount                   = 'sa/api/v1/dbg-telemetry/';
+const projectId               = 'sa';
+
+const appRecord = {
+  projectId,
+  mount,
+  appId,
+  route               : '/:project(sa)/api/v:version/dbg-telemetry/',
+  isAdminApp          : false,
+  useHttp             : true,
+  useHttps            : true,
+  requireClientCerts  : false
+};
 
 var lib = {};
 
-lib.addRoutes = function(db, addHandler, callback) {
-  var handlers    = {}, watchers = {}, data = {};
+lib.addRoutes = function(addRoute, onStart, db, callback) {
+//  var r;
+  var watchers = {}, data = {};
   var uploads     = {};
   var itemsForS3  = {};
 
@@ -29,7 +50,7 @@ lib.addRoutes = function(db, addHandler, callback) {
   /**
    *  /upload handler
    */
-  addHandler('/upload/*', handlers.upload = function(req, res, params, splats, query) {
+  const upload = function(req, res, params, splats, query) {
     var   result    = {count:0, attrCount:0};
     const origAll   = sg.deepCopy(sg.extend(req.bodyJson || {}, params || {}, query || {}));
 
@@ -118,9 +139,9 @@ lib.addRoutes = function(db, addHandler, callback) {
     res.statusCode  = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify(result));
-  });
+  };
 
-  addHandler('/watch/*', handlers.watch = function(req, res, params, splats, query) {
+  const watch = function(req, res, params, splats, query) {
     const all       = sg.extend(req.bodyJson || {}, params || {}, query || {});
     const id        = sg.extract(all, 'watch-id,id')  || 'defId';
     const sessionId = sg.extract(all, 'session-id')   || 'defSession';
@@ -145,9 +166,48 @@ lib.addRoutes = function(db, addHandler, callback) {
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify(result));
     }
-  });
+  };
 
-  return callback();
+  return sg.__run([function(next) {
+    registerAsServiceApp(appId, mount, appRecord, next);
+
+//  }, function(next) {
+//    return clusterConfig.configuration({}, {}, (err, r_) => {
+//      if (err) { return sg.die(err, callback, 'addRoutesToServers.clusterConfig.configuration'); }
+//
+//      r = r_;
+//      return next();
+//    });
+
+  }, function(next) {
+    addRoute(`/${mount}`, '/upload',    upload);
+    addRoute(`/${mount}`, '/upload/*',  upload);
+
+    addRoute(`/${mount}`, '/watch',     watch);
+    addRoute(`/${mount}`, '/watch/*',   watch);
+
+    return next();
+
+  }, function(next) {
+
+    // Add startup notification handlers
+    onStart.push(function(port, myIp) {
+      const myServiceLocation   = `http://${myIp}:${port}`;
+
+      console.log(`${sg.pad(appId, 30)} : [${myServiceLocation}/${mount}]`);
+      registerMyService();
+
+      function registerMyService() {
+        setTimeout(registerMyService, 750);
+        registerAsService(appId, myServiceLocation, myIp, 4000);
+      }
+    });
+
+    return next();
+
+  }], function() {
+    return callback();
+  });
 };
 
 _.each(lib, (value, key) => {

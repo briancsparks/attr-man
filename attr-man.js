@@ -20,43 +20,55 @@ const _                       = sg._;
 const serverassist            = sg.include('serverassist') || require('serverassist');
 const http                    = require('http');
 const urlLib                  = require('url');
-const routes                  = require('./routes/routes');
-const Router                  = require('routes');
+const router                  = require('routes')();
 const MongoClient             = require('mongodb').MongoClient;
 
-const verbose             = sg.verbose;
+const verbose                 = sg.verbose;
 const normlz                  = sg.normlz;
-const registerAsService       = serverassist.registerAsService;
-const registerAsServiceApp    = serverassist.registerAsServiceApp;
 
 const ARGV                    = sg.ARGV();
-const router                  = Router();
-const mongoHost               = serverassist.mongoHost();
+const mkAddRoute              = serverassist.mkAddRoute;
 const myIp                    = serverassist.myIp();
+
+const myName                  = 'attr-man.js';
 
 const appName                 = 'sa_dbgtelemetry';
 const mount                   = 'sa/api/v1/dbg-telemetry/';
 const projectId               = 'sa';
 
 const main = function() {
+  const dbName                = ARGV.dbName;
+  const port                  = ARGV.port       || 8105;
+
+  const mongoHost             = serverassist.mongoHost(dbName);
+
   return MongoClient.connect(mongoHost, (err, db) => {
     if (err)      { return sg.die(err, `Could not connect to DB ${mongoHost}`); }
 
-    const port      = ARGV.port || 8105;
+    const myServiceLocation   = `http://${myIp}:${port}`;
+    const addRoute            = mkAddRoute(myName, router, myServiceLocation);
+    var   onStarters          = [];
 
-    var addOneRoute = function(router, path, fn) {
-      verbose(2, `Adding route: ${path}`);
-      router.addRoute(path, fn);
-    };
-
-    var addHandler  = function(restOfRoute, fn) {
-      addOneRoute(router, normlz(`/${mount}/${restOfRoute}`), fn);
-    };
+//    var addOneRoute = function(router, path, fn) {
+//      verbose(2, `Adding route: ${path}`);
+//      router.addRoute(path, fn);
+//    };
+//
+//    var addHandler  = function(restOfRoute, fn) {
+//      addOneRoute(router, normlz(`/${mount}/${restOfRoute}`), fn);
+//    };
 
     return sg.__run([function(next) {
-      return routes.addRoutes(db, addHandler, (err) => {
-        return next();
-      });
+
+      const routesFiles = ['./routes/routes'];
+
+      sg.__each(routesFiles, (file, nextFile) => {
+        return require(file).addRoutes(addRoute, onStarters, db, nextFile);
+      }, next);
+
+//      return routes.addRoutes(db, addHandler, (err) => {
+//        return next();
+//      });
     }], function() {
 
       //----------------------------------------------------------------------
@@ -71,40 +83,40 @@ const main = function() {
         var   resPayload    = `Result for ${pathname}`;
 
         const host          = req.headers.host;
-        const route         = router.match(pathname);
+        const match         = router.match(pathname);
 
-        // Do we have a route?
-        if (!route || !_.isFunction(route.fn)) {
-          res.statusCode  = 404;
-          resPayload      = `404 - Not Found: ${host} / ${pathname}`;
-          res.end(resPayload+'\n');
-          return;
+        // Do we have a match?
+        if (!match || !_.isFunction(match.fn)) {
+          return sg._404(req, res, null, `Host ${host} is known, path ${pathname} is not.`);
         }
 
         return sg.getBody(req, () => {
-          return route.fn(req, res, route.params, route.splats, url.query, route);
+          return match.fn(req, res, match.params, match.splats, url.query, match);
         });
       });
 
       server.listen(port, myIp, () => {
-        verbose(2, `${appName} running at http://${myIp}:${port}/`);
+        console.log(`${appName} running at http://${myIp}:${port}/`);
 
-        registerAsServiceApp(appName, mount, {projectId});
+        _.each(onStarters, onStart => {
+          onStart(port, myIp);
+        });
 
-        registerMyService();
-        function registerMyService() {
-          setTimeout(registerMyService, 750);
-          registerAsService(appName, `http://${myIp}:${port}`, myIp, 4000);
-        }
+//        return next();
+//        registerAsServiceApp(appName, mount, {projectId});
+//
+//        registerMyService();
+//        function registerMyService() {
+//          setTimeout(registerMyService, 750);
+//          registerAsService(appName, `http://${myIp}:${port}`, myIp, 4000);
+//        }
       });
 
     });
   });
 };
 
-if (sg.callMain(ARGV, __filename)) {
-  main();
-}
+main();
 
 /**
  *  # How it Works
