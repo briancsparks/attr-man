@@ -10,8 +10,6 @@
 const sg                      = require('sgsg');
 const _                       = sg._;
 const serverassist            = sg.include('serverassist') || require('serverassist');
-//const clusterLib              = sg.include('js-cluster')   || require('js-cluster');
-//const clusterConfig           = require('../../ra-scripts/cluster-config');
 const AWS                     = require('aws-sdk');
 
 const setOnn                  = sg.setOnn;
@@ -19,6 +17,7 @@ const verbose                 = sg.verbose;
 const inspect                 = sg.inspectFlat;
 const registerAsService       = serverassist.registerAsService;
 const registerAsServiceApp    = serverassist.registerAsServiceApp;
+const configuration           = serverassist.configuration;
 
 const appId                   = 'sa_dbgtelemetry';
 const mount                   = 'sa/api/v1/dbg-telemetry/';
@@ -38,7 +37,7 @@ const appRecord = {
 var lib = {};
 
 lib.addRoutes = function(addRoute, onStart, db, callback) {
-//  var r;
+  var r;
   var watchers = {}, data = {};
   var uploads     = {};
   var itemsForS3  = {};
@@ -171,13 +170,13 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
   return sg.__run([function(next) {
     registerAsServiceApp(appId, mount, appRecord, next);
 
-//  }, function(next) {
-//    return clusterConfig.configuration({}, {}, (err, r_) => {
-//      if (err) { return sg.die(err, callback, 'addRoutesToServers.clusterConfig.configuration'); }
-//
-//      r = r_;
-//      return next();
-//    });
+  }, function(next) {
+    return configuration({}, {}, (err, r_) => {
+      if (err) { return sg.die(err, callback, 'addRoutesToServers.configuration'); }
+
+      r = r_;
+      return next();
+    });
 
   }, function(next) {
     addRoute(`/${mount}`, '/upload',    upload);
@@ -208,7 +207,7 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
       const myServiceLocation   = `http://${myIp}:${port}`;
       const xapiAppId = 'sa_xapi_telemetry_1';
 
-      console.log(`${sg.pad(xapiAppId, 30)} : [${myServiceLocation}/${mount}]`);
+      console.log(`${sg.pad(xapiAppId, 30)} : [${myServiceLocation}]`);
       registerMyService();
 
       function registerMyService() {
