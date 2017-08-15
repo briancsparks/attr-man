@@ -23,18 +23,11 @@ const urlLib                  = require('url');
 const router                  = require('routes')();
 const MongoClient             = require('mongodb').MongoClient;
 
-const verbose                 = sg.verbose;
-const normlz                  = sg.normlz;
-
 const ARGV                    = sg.ARGV();
 const mkAddRoute              = serverassist.mkAddRoute;
 const myIp                    = serverassist.myIp();
 
 const myName                  = 'attr-man.js';
-
-const appName                 = 'sa_dbgtelemetry';
-const mount                   = 'sa/api/v1/dbg-telemetry/';
-const projectId               = 'sa';
 
 const main = function() {
   const dbName                = ARGV.dbName;
@@ -49,26 +42,14 @@ const main = function() {
     const addRoute            = mkAddRoute(myName, router, myServiceLocation);
     var   onStarters          = [];
 
-//    var addOneRoute = function(router, path, fn) {
-//      verbose(2, `Adding route: ${path}`);
-//      router.addRoute(path, fn);
-//    };
-//
-//    var addHandler  = function(restOfRoute, fn) {
-//      addOneRoute(router, normlz(`/${mount}/${restOfRoute}`), fn);
-//    };
-
     return sg.__run([function(next) {
 
-      const routesFiles = ['./routes/routes'];
+      const routesFiles = ['./routes/upload-watch'];
 
       sg.__each(routesFiles, (file, nextFile) => {
         return require(file).addRoutes(addRoute, onStarters, db, nextFile);
       }, next);
 
-//      return routes.addRoutes(db, addHandler, (err) => {
-//        return next();
-//      });
     }], function() {
 
       //----------------------------------------------------------------------
@@ -80,8 +61,6 @@ const main = function() {
 
         const url           = urlLib.parse(req.url, true);
         const pathname      = url.pathname;
-        var   resPayload    = `Result for ${pathname}`;
-
         const host          = req.headers.host;
         const match         = router.match(pathname);
 
@@ -90,26 +69,18 @@ const main = function() {
           return sg._404(req, res, null, `Host ${host} is known, path ${pathname} is not.`);
         }
 
+        // Send to handler
         return sg.getBody(req, () => {
           return match.fn(req, res, match.params, match.splats, url.query, match);
         });
       });
 
       server.listen(port, myIp, () => {
-        console.log(`${appName} running at http://${myIp}:${port}/`);
+        console.log(`${myName} running at http://${myIp}:${port}/`);
 
         _.each(onStarters, onStart => {
           onStart(port, myIp);
         });
-
-//        return next();
-//        registerAsServiceApp(appName, mount, {projectId});
-//
-//        registerMyService();
-//        function registerMyService() {
-//          setTimeout(registerMyService, 750);
-//          registerAsService(appName, `http://${myIp}:${port}`, myIp, 4000);
-//        }
       });
 
     });
