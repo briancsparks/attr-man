@@ -183,14 +183,14 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
     addRoute(`/${mount}`, '/upload',    upload);
     addRoute(`/${mount}`, '/upload/*',  upload);
 
-    addRoute(`/${mount}`, '/watch',     watch);
-    addRoute(`/${mount}`, '/watch/*',   watch);
+    addRoute(`/telemetry/xapi/v1`, '/watch',     watch);
+    addRoute(`/telemetry/xapi/v1`, '/watch/*',   watch);
 
     return next();
 
   }, function(next) {
 
-    // Add startup notification handlers
+    // Add startup notification handler for uploader
     onStart.push(function(port, myIp) {
       const myServiceLocation   = `http://${myIp}:${port}`;
 
@@ -200,6 +200,20 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
       function registerMyService() {
         setTimeout(registerMyService, 750);
         registerAsService(appId, myServiceLocation, myIp, 4000);
+      }
+    });
+
+    // Add startup notification handler for xapi
+    onStart.push(function(port, myIp) {
+      const myServiceLocation   = `http://${myIp}:${port}`;
+      const xapiAppId = 'sa_xapi_telemetry_1';
+
+      console.log(`${sg.pad(xapiAppId, 30)} : [${myServiceLocation}/${mount}]`);
+      registerMyService();
+
+      function registerMyService() {
+        setTimeout(registerMyService, 750);
+        registerAsService(xapiAppId, myServiceLocation, myIp, 4000);
       }
     });
 
