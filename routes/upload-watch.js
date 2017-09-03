@@ -133,7 +133,7 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
 
     result.ok       = true;
     verbose(3, `Received: ${sessionId}:`, result);
-    console.log(inspect({sessionId, result}));
+    verbose(1, {sessionId, result});
 
     res.statusCode  = 200;
     res.setHeader('Content-Type', 'application/json');
