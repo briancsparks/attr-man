@@ -39,7 +39,8 @@ const main = function() {
     return callback();
   };
 
-  return serverassist.loadHttpServer(myName, params, addRoutes, (err, server, db) => {
+  params.addModRoutes = addRoutes;
+  return serverassist.loadHttpServer(myName, params, (err, server, db) => {
     if (err)    { return sg.die(err, 'loading-http-server'); }
 
     console.log('attrman up');
