@@ -18,74 +18,93 @@
 const sg                      = require('sgsg');
 const _                       = sg._;
 const serverassist            = sg.include('serverassist') || require('serverassist');
-const http                    = require('http');
-const urlLib                  = require('url');
-const router                  = require('routes')();
-const MongoClient             = require('mongodb').MongoClient;
+//const http                    = require('http');
+//const urlLib                  = require('url');
+//const router                  = require('routes')();
+//const MongoClient             = require('mongodb').MongoClient;
 
 const ARGV                    = sg.ARGV();
-const mkAddRoute              = serverassist.mkAddRoute;
-const myIp                    = serverassist.myIp();
+//const mkAddRoute              = serverassist.mkAddRoute;
+//const myIp                    = serverassist.myIp();
 
 const myName                  = 'attr-man.js';
 
 const main = function() {
-  const dbName                = ARGV.dbName;
-  const port                  = ARGV.port       || 8105;
+  var   params = {
+    port        : ARGV.port || 8105,
+    routes      : ['./routes/upload-watch']
+  };
 
-  const mongoHost             = serverassist.mongoHost(dbName);
+  // My chance to load routes or on-starters
+  const addRoutes = function(addRoute, onStart, db, callback) {
+    console.log('attrman http server loading routes');
+    return callback();
+  };
 
-  return MongoClient.connect(mongoHost, (err, db) => {
-    if (err)      { return sg.die(err, `Could not connect to DB ${mongoHost}`); }
+  return serverassist.loadHttpServer(myName, params, addRoutes, (err, server, db) => {
+    if (err)    { return sg.die(err, 'loading-http-server'); }
 
-    const myServiceLocation   = `http://${myIp}:${port}`;
-    const addRoute            = mkAddRoute(myName, router, myServiceLocation);
-    var   onStarters          = [];
-
-    return sg.__run([function(next) {
-
-      const routesFiles = ['./routes/upload-watch'];
-
-      sg.__each(routesFiles, (file, nextFile) => {
-        return require(file).addRoutes(addRoute, onStarters, db, nextFile);
-      }, next);
-
-    }], function() {
-
-      //----------------------------------------------------------------------
-      // Start the HTTP server
-      //----------------------------------------------------------------------
-
-      // The viewer web-app gets the current items here
-      const server = http.createServer((req, res) => {
-
-        const url           = urlLib.parse(req.url, true);
-        const pathname      = url.pathname;
-        const host          = req.headers.host;
-        const match         = router.match(pathname);
-
-        // Do we have a match?
-        if (!match || !_.isFunction(match.fn)) {
-          return sg._404(req, res, null, `Host ${host} is known, path ${pathname} is not.`);
-        }
-
-        // Send to handler
-        return sg.getBody(req, () => {
-          return match.fn(req, res, match.params, match.splats, url.query, match);
-        });
-      });
-
-      server.listen(port, myIp, () => {
-        console.log(`${myName} running at http://${myIp}:${port}/`);
-
-        _.each(onStarters, onStart => {
-          onStart(port, myIp);
-        });
-      });
-
-    });
+    console.log('attrman up');
   });
 };
+
+//const mainX = function() {
+//  const dbName                = ARGV.dbName;
+//  const port                  = ARGV.port       || 8105;
+//
+//  const mongoHost             = serverassist.mongoHost(dbName);
+//
+//  return MongoClient.connect(mongoHost, (err, db) => {
+//    if (err)      { return sg.die(err, `Could not connect to DB ${mongoHost}`); }
+//
+//    const myServiceLocation   = `http://${myIp}:${port}`;
+//    const addRoute            = mkAddRoute(myName, router, myServiceLocation);
+//    var   onStarters          = [];
+//
+//    return sg.__run([function(next) {
+//
+//      const routesFiles = ['./routes/upload-watch'];
+//
+//      sg.__each(routesFiles, (file, nextFile) => {
+//        return require(file).addRoutes(addRoute, onStarters, db, nextFile);
+//      }, next);
+//
+//    }], function() {
+//
+//      //----------------------------------------------------------------------
+//      // Start the HTTP server
+//      //----------------------------------------------------------------------
+//
+//      // The viewer web-app gets the current items here
+//      const server = http.createServer((req, res) => {
+//
+//        const url           = urlLib.parse(req.url, true);
+//        const pathname      = url.pathname;
+//        const host          = req.headers.host;
+//        const match         = router.match(pathname);
+//
+//        // Do we have a match?
+//        if (!match || !_.isFunction(match.fn)) {
+//          return sg._404(req, res, null, `Host ${host} is known, path ${pathname} is not.`);
+//        }
+//
+//        // Send to handler
+//        return sg.getBody(req, () => {
+//          return match.fn(req, res, match.params, match.splats, url.query, match);
+//        });
+//      });
+//
+//      server.listen(port, myIp, () => {
+//        console.log(`${myName} running at http://${myIp}:${port}/`);
+//
+//        _.each(onStarters, onStart => {
+//          onStart(port, myIp);
+//        });
+//      });
+//
+//    });
+//  });
+//};
 
 main();
 

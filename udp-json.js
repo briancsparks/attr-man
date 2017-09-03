@@ -68,7 +68,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
 
   }], function() {
 
-      const startSession = function(sessionId, callback) {
+    const startSession = function(sessionId, callback) {
 
       csOptions.sessionId = sessionId;
       const localServerassist = clientStart(csOptions, function(err, config) {
