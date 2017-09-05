@@ -2,7 +2,7 @@
 
 
 curl -ks 'https://hq.mobilewebassist.net/sa/clientStart' -d '{"partnerId":"HP_SA_SERVICE","version":1,"rsvr":"hqqa"}' > /tmp/watcher.json
-upstream="$(cat /tmp/watcher.json | jq -r '.upstreams.sa_dbgtelemetry')"
+upstream="$(cat /tmp/watcher.json | jq -r '.upstreams.sa_attrstream')"
 echo $upstream
 
 for ((i=0; i<25; ++i)); do

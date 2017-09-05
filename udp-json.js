@@ -212,7 +212,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       if (sessionFlow) {
         body.payload = sessionFlow;
 
-        return serverassist.POST('sa_dbgtelemetry', '/upload/', /*query=*/ {}, body, function(err, result) {
+        return serverassist.POST('sa_attrstream', '/upload/', /*query=*/ {}, body, function(err, result) {
           verbose(2, `Uploading from ${whichOne} sessionFlow ${sessionId}, length: ${sessionFlow.length}, ${_.keys(body)}, ${err}`);
           if (err)  { return callback(err); }
 
