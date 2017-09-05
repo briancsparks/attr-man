@@ -13,21 +13,24 @@ const serverassist            = sg.include('serverassist') || require('serverass
 const AWS                     = require('aws-sdk');
 
 const setOnn                  = sg.setOnn;
+const deref                   = sg.deref;
 const verbose                 = sg.verbose;
+const myColor                 = serverassist.myColor();
+const myStack                 = serverassist.myStack();
 const inspect                 = sg.inspectFlat;
 const registerAsService       = serverassist.registerAsService;
 const registerAsServiceApp    = serverassist.registerAsServiceApp;
 const configuration           = serverassist.configuration;
 
-const appId                   = 'sa_dbgtelemetry';
-const mount                   = 'sa/api/v1/dbg-telemetry/';
+const appId                   = 'sa_attrstream';
+const mount                   = '*/api/v1/attrstream/';
 const projectId               = 'sa';
 
 const appRecord = {
   projectId,
   mount,
   appId,
-  route               : '/:project(sa)/api/v:version/dbg-telemetry/',
+  route               : '*/api/v:version/attrstream/',
   isAdminApp          : false,
   useHttp             : true,
   useHttps            : true,
@@ -179,42 +182,71 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
     });
 
   }, function(next) {
-    addRoute(`/${mount}`, '/upload',    upload);
-    addRoute(`/${mount}`, '/upload/*',  upload);
 
-    addRoute(`/attrstream/xapi/v1`, '/watch',     watch);
-    addRoute(`/attrstream/xapi/v1`, '/watch/*',   watch);
+    //
+    //  Add routes for the public APIs
+    //
+
+    console.log(`  -- attribute stream public routes:`);
+    _.each(r.result.app_prj, (app_prj, app_prjName) => {
+
+      if (app_prj.app.appId !== appId) { return; }    /* this is not my app */
+
+      const [projectId, appName]  = app_prjName.split('_');
+      const myMount               = deref(app_prj, [myStack, myColor, 'mount']) || '';
+
+      addRoute(`/:project(${projectId})/api/v:version/attrstream`, `/upload`,       upload, app_prjName);
+      addRoute(`/:project(${projectId})/api/v:version/attrstream`, `/upload/*`,     upload, app_prjName);
+
+      // Add startup notification handler for uploader
+      onStart.push(function(port, myIp) {
+        const myServiceLocation   = `http://${myIp}:${port}`;
+
+        console.log(`${sg.pad(app_prjName, 35)} [${myServiceLocation}] (for /${myMount})`);
+        registerMyService();
+
+        function registerMyService() {
+          setTimeout(registerMyService, 750);
+          registerAsService(app_prjName, myServiceLocation, myIp, 4000);
+        }
+      });
+    });
 
     return next();
 
   }, function(next) {
 
-    // Add startup notification handler for uploader
-    onStart.push(function(port, myIp) {
-      const myServiceLocation   = `http://${myIp}:${port}`;
+    //
+    //  Add routes for the protected (xapi) APIs
+    //
 
-      console.log(`${sg.pad(appId, 30)} : [${myServiceLocation}/${mount}]`);
-      registerMyService();
+    console.log(`  -- attribute stream protected (xapi) routes:`);
+    _.each(r.result.app_prj, (app_prj, app_prjName) => {
 
-      function registerMyService() {
-        setTimeout(registerMyService, 750);
-        registerAsService(appId, myServiceLocation, myIp, 4000);
-      }
+      if (app_prj.app.appId !== appId) { return; }    /* this is not my app */
+
+      const [projectId, appName]  = app_prjName.split('_');
+
+      addRoute(`/attrstream/xapi/:project(${projectId})/v:version`, '/watch',       watch,  app_prjName);
+      addRoute(`/attrstream/xapi/:project(${projectId})/v:version`, '/watch/*',     watch,  app_prjName);
+
+      // Add startup notification handler for xapi
+      onStart.push(function(port, myIp) {
+        const myServiceLocation   = `http://${myIp}:${port}`;
+        const xapiAppId           = `${projectId}_xapi_${appName}_1`;
+
+        console.log(`${sg.pad(xapiAppId, 35)} [${myServiceLocation}]`);
+        registerMyService();
+
+        function registerMyService() {
+          setTimeout(registerMyService, 750);
+          registerAsService(xapiAppId, myServiceLocation, myIp, 4000);
+        }
+      });
     });
 
-    // Add startup notification handler for xapi
-    onStart.push(function(port, myIp) {
-      const myServiceLocation   = `http://${myIp}:${port}`;
-      const xapiAppId = 'sa_xapi_attrstream_1';
-
-      console.log(`${sg.pad(xapiAppId, 30)} : [${myServiceLocation}]`);
-      registerMyService();
-
-      function registerMyService() {
-        setTimeout(registerMyService, 750);
-        registerAsService(xapiAppId, myServiceLocation, myIp, 4000);
-      }
-    });
+    addRoute(`/attrstream/xapi/v:version`, '/watch',     watch, `${appId} (to discover projectId)`);
+    addRoute(`/attrstream/xapi/v:version`, '/watch/*',   watch, `${appId} (to discover projectId)`);
 
     return next();
 
