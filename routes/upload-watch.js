@@ -82,8 +82,8 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
     // Put into s3
     (function() {
       var uploadData = {
-        sessionId   : sessionItems.sessionId[0],
-        clientId    : sessionItems.clientId[0],
+        sessionId   : (sessionItems.sessionId || [])[0],
+        clientId    : (sessionItems.clientId || [])[0],
         sessionIds  : sessionItems.sessionId,
         clientIds   : sessionItems.clientId
       };
