@@ -24,7 +24,6 @@ const argvGet                 = sg.argvGet;
 const verbose                 = sg.verbose;
 const clientStart             = serverassistLib.client.clientStart;
 
-const partnerId               = 'HP_SA_SERVICE';
 const version                 = 1;
 
 var   sessions                = {};
@@ -37,6 +36,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   const upMaxCount        = argvGet(argv, 'upload-max,max')       || 275;
   var   clientId          = argvGet(argv, 'client-id,client');
   const clientPrefix      = argvGet(argv, 'client-prefix,pre');
+  var   partnerId         = argvGet(argv, 'partner-id,partner')   || 'HP_SA_SERVICE';
   const defSessionId      = argvGet(argv, 'session-id')           || 'session_'+_.now()
 
   var   serverassist;
@@ -74,7 +74,10 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       const localServerassist = clientStart(csOptions, function(err, config) {
         if (sg.ok(err)) {
           serverassist = localServerassist;
-          console.log(`Sucessfully got startup info from ${serverassist.upstreams.sa_hq}`)
+
+          _.each(serverassist.upstreams, (upstream, key) => {
+            console.log(`  Using upstream: ${sg.lpad(key, 20)} ->> ${upstream}`);
+          });
         }
         return callback(err, config);
       });
@@ -212,7 +215,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       if (sessionFlow) {
         body.payload = sessionFlow;
 
-        return serverassist.POST('sa_attrstream', '/upload/', /*query=*/ {}, body, function(err, result) {
+        return serverassist.POST('attrstream', '/upload/', /*query=*/ {}, body, function(err, result) {
           verbose(2, `Uploading from ${whichOne} sessionFlow ${sessionId}, length: ${sessionFlow.length}, ${_.keys(body)}, ${err}`);
           if (err)  { return callback(err); }
 
