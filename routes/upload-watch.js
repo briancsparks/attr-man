@@ -18,6 +18,7 @@ const verbose                 = sg.verbose;
 const myColor                 = serverassist.myColor();
 const myStack                 = serverassist.myStack();
 const inspect                 = sg.inspectFlat;
+const extractClientId         = serverassist.extractClientId;
 const registerAsService       = serverassist.registerAsService;
 const registerAsServiceApp    = serverassist.registerAsServiceApp;
 const configuration           = serverassist.configuration;
@@ -53,94 +54,29 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
    *  /upload handler
    */
   const upload = function(req, res, params, splats, query) {
-    var   result    = {count:0, attrCount:0};
-    const origAll   = sg.deepCopy(sg.extend(req.bodyJson || {}, params || {}, query || {}));
+    var   result        = {count:0, attrCount:0};
+    const origAllJson   = JSON.stringify(sg.extend(req.bodyJson || {}, params || {}, query || {}));
 
-    const body      = sg.extend(req.bodyJson || {});
-    const payload   = sg.extract(body, 'payload');
-    const all       = sg.extend(body || {}, params || {}, query ||{});
-    const sessionId = sg.extract(all, 'sessionId') || 'defSession';
-    const clientId  = sg.extract(all, 'clientId');
+    const body          = sg.extend(req.bodyJson || {});
+    const payload       = sg.extract(body, 'payload');
+    const all           = sg.extend(body || {}, params || {}, query ||{});
 
-    //console.log({sessionId, clientId, all, splats, payload});
+    const sessionId     = sg.extract(all, 'sessionId')      || 'defSession';
+    const projectId     = sg.extract(all, 'projectId')      || 'sa';
+    const clientId      = extractClientId(all, 'clientId');
 
-    var sessionData   = data[sessionId]         = data[sessionId]         || {};
-    var sessionItems  = itemsForS3[sessionId]   = itemsForS3[sessionId]   || {count:0, ctime:_.now(), mtime:_.now()};
+    const bucket    = bucketName(projectId);
+    if (!bucket) {
+      return serverassist._404(req, res, sg.extend({ok:false}, result), `No bucket for ${projectId}`);
+    }
 
-    sessionItems.payload = [...(sessionItems.payload || []), ...(origAll.payload || [])];
-    _.each(_.keys(_.omit(origAll, 'payload', 'count')), (key) => {
-      sessionItems[key] = sg.addToSet(origAll[key], (sessionItems[key] || []));
+    const s3Params  = serverassist.bucketParams(clientId, sessionId, bucket, origAllJson);
+    return s3.putObject(s3Params, (err, data) => {
+      console.log(`added ${payload.length} to S3:`, err, data);
+
+      result.ok       = true;
+      serverassist._200(req, res, result);
     });
-    sessionItems.count += 1;
-    sessionItems.mtime  = _.now();
-
-    //// Add back in to see accumulation of sessionItems
-    //var silog = sg.deepCopy(sessionItems);
-    //silog.payload = silog.payload.length;
-    //console.error('si', silog, _.keys(origAll));
-
-    // Put into s3
-    (function() {
-      var uploadData = {
-        sessionId   : (sessionItems.sessionId || [])[0],
-        clientId    : (sessionItems.clientId || [])[0],
-        sessionIds  : sessionItems.sessionId,
-        clientIds   : sessionItems.clientId
-      };
-
-      uploadData = sg.reduce(_.keys(_.omit(sessionItems, 'sessionId', 'clientId', 'payload')), uploadData, (m, key) => {
-        return sg.kv(m, key, sessionItems[key]);
-      });
-
-      uploadData.elapsed = uploadData.mtime - uploadData.ctime;
-      uploadData.payload = sessionItems.payload;
-
-      var params = {
-        Body:         JSON.stringify(uploadData),
-        Bucket:       bucketName(),
-        Key:          `${sessionId}.json`,
-        ContentType:  'application/json'
-      };
-
-      return s3.putObject(params, (err, data) => {
-        console.log(`added ${sessionItems.payload.length} to S3:`, err, data);
-      });
-    }());
-
-    // key/values that should be put onto all items
-    var kvAll       = {sessionId, clientId};
-
-    _.each(payload, (payloadItem_) => {
-      const payloadItem = sg.extend(payloadItem_, kvAll);
-      verbose(3, `payload item`, payloadItem);
-
-      result.count += 1;
-
-      // Put the item into each watcher queue
-      _.each(watchers, (watcher, id) => {
-        watcher.push(sg.extend(payloadItem));     // extend(), so that it is 'final'
-      });
-
-      // Set the attribute (on the right object) within the session data
-      const key         = sg.extract(payloadItem, 'key');
-      const value       = sg.extract(payloadItem, 'value');
-
-      setOnn(sessionData, [payloadItem.type, payloadItem.id, key], value);
-      result.attrCount += 1;
-
-      _.each(payloadItem, (payloadValue, payloadKey) => {
-        setOnn(sessionData, [payloadItem.type, payloadItem.id, payloadKey], payloadValue);
-        result.attrCount += 1;
-      });
-    });
-
-    result.ok       = true;
-    verbose(3, `Received: ${sessionId}:`, result);
-    verbose(1, {sessionId, result});
-
-    res.statusCode  = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(result));
   };
 
   const watch = function(req, res, params, splats, query) {
@@ -178,6 +114,13 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
       if (err) { return sg.die(err, callback, 'addRoutesToServers.configuration'); }
 
       r = r_;
+      //console.log('configuration', sg.inspect(r.result.app_prj));
+
+      //_.each(r.result.app_prj, (app_prj, app_prjName) => {
+      //  if (app_prj.app.appId !== appId) { return; }    /* this is not my app */
+      //  console.log(`my app: ${app_prjName}`, sg.inspect(app_prj));
+      //});
+
       return next();
     });
 
@@ -195,8 +138,8 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
       const [projectId, appName]  = app_prjName.split('_');
       const myMount               = deref(app_prj, [myStack, myColor, 'mount']) || '';
 
-      addRoute(`/:project(${projectId})/api/v:version/attrstream`, `/upload`,       upload, app_prjName);
-      addRoute(`/:project(${projectId})/api/v:version/attrstream`, `/upload/*`,     upload, app_prjName);
+      addRoute(`/:projectId(${projectId})/api/v:version/attrstream`, `/upload`,       upload, app_prjName);
+      addRoute(`/:projectId(${projectId})/api/v:version/attrstream`, `/upload/*`,     upload, app_prjName);
 
       // Add startup notification handler for uploader
       onStart.push(function(port, myIp) {
@@ -227,8 +170,8 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
 
       const [projectId, appName]  = app_prjName.split('_');
 
-      addRoute(`/attrstream/xapi/:project(${projectId})/v:version`, '/watch',       watch,  app_prjName);
-      addRoute(`/attrstream/xapi/:project(${projectId})/v:version`, '/watch/*',     watch,  app_prjName);
+      addRoute(`/attrstream/xapi/:projectId(${projectId})/v:version`, '/watch',       watch,  app_prjName);
+      addRoute(`/attrstream/xapi/:projectId(${projectId})/v:version`, '/watch/*',     watch,  app_prjName);
 
       // Add startup notification handler for xapi
       onStart.push(function(port, myIp) {
@@ -253,17 +196,25 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
   }], function() {
     return callback();
   });
+
+
+  /**
+   *  Returns the bucket name that should be used for the project.
+   */
+  function bucketName(projectId) {
+
+    const app_prjName   = `${projectId}_attrstream`;
+    const app_prj       = deref(r, ['result', 'app_prj', app_prjName, myStack, myColor]);
+
+    const vers = sg.isProduction() ? 'prod' : 'test';
+
+    const result = deref(app_prj, ['attrstream', 'buckets', 'asis', vers]);
+    return result;
+  }
 };
 
 _.each(lib, (value, key) => {
   exports[key] = value;
 });
 
-function bucketName() {
-  if (sg.isProduction()) {
-    return 'sa-telemetry-netlab-asis-pub';
-  }
-
-  return 'sa-telemetry-netlab-asis-test';
-}
 
