@@ -42,11 +42,7 @@ var lib = {};
 
 lib.addRoutes = function(addRoute, onStart, db, callback) {
   var r;
-  var watchers = {}, data = {};
-  var uploads     = {};
-  var itemsForS3  = {};
-
-  var attrMan = db.collection('attributeMan');
+  var watchers = {};
 
   const s3 = new AWS.S3();
 
@@ -72,7 +68,7 @@ lib.addRoutes = function(addRoute, onStart, db, callback) {
 
     const s3Params  = serverassist.bucketParams(clientId, sessionId, bucket, origAllJson);
     return s3.putObject(s3Params, (err, data) => {
-      console.log(`added ${payload.length} to S3:`, err, data);
+      console.log(`added ${payload.length} to S3 (${s3Params.Key}):`, err, data);
 
       result.ok       = true;
       serverassist._200(req, res, result);
