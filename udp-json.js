@@ -38,6 +38,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   const clientPrefix      = argvGet(argv, 'client-prefix,pre');
   var   partnerId         = argvGet(argv, 'partner-id,partner')   || 'HP_SA_SERVICE';
   const defSessionId      = argvGet(argv, 'session-id')           || 'session_'+_.now()
+  const service           = argvGet(argv, 'service')              || 'attrstream';
 
   var   serverassist;
   var   sendPayload;
@@ -207,7 +208,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       const callback      = callback_ || function(){};
 
       const sessionFlow   = sg.deepCopy(sessionFlows[sessionId]);
-      var   body          = {sessionId, clientId};
+      var   body          = sg.extend({sessionId, clientId}, {partnerId}, {version});
 
       uploadTimer         = null;
       delete sessionFlows[sessionId];
@@ -215,7 +216,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       if (sessionFlow) {
         body.payload = sessionFlow;
 
-        return serverassist.POST('attrstream', '/upload/', /*query=*/ {}, body, function(err, result) {
+        return serverassist.POST(service, '/upload/', /*query=*/ {}, body, function(err, result) {
           verbose(2, `Uploading from ${whichOne} sessionFlow ${sessionId}, length: ${sessionFlow.length}, ${_.keys(body)}, ${err}`);
           if (err)  { return callback(err); }
 
