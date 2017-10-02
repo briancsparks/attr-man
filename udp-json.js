@@ -36,16 +36,19 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   const upMaxCount        = argvGet(argv, 'upload-max,max')       || 275;
   var   clientId          = argvGet(argv, 'client-id,client');
   const clientPrefix      = argvGet(argv, 'client-prefix,pre');
-  var   partnerId         = argvGet(argv, 'partner-id,partner')   || 'HP_SA_SERVICE';
   const defSessionId      = argvGet(argv, 'session-id')           || 'session_'+_.now()
+
+  // Configuration of link to upload
+  var   partnerId         = argvGet(argv, 'partner-id,partner')   || 'HP_SA_SERVICE';
   const service           = argvGet(argv, 'service')              || 'attrstream';
+  const rsvr              = argvGet(argv, 'rsvr');
 
   var   serverassist;
   var   sendPayload;
   var   sessions          = {};
   var   sessionFlows      = {};
 
-  var csOptions = sg.extend({partnerId}, {version});
+  var csOptions = sg.extend({partnerId}, {version}, {rsvr});
 
   return sg.__run([function(next) {
 
