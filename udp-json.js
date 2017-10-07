@@ -30,7 +30,7 @@ var   sessions                = {};
 
 var lib = {};
 
-var udp2DbgTelemetry = function(argv, context, callback) {
+var main = function(argv) {
   const udpPort           = argvGet(argv, 'udp-port,port')        || 50505;
   const upTimeout         = argvGet(argv, 'upload-timeout,to')    || 5000;
   const upMaxCount        = argvGet(argv, 'upload-max,max')       || 275;
@@ -43,7 +43,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
   const service           = argvGet(argv, 'service')              || 'attrstream';
   const rsvr              = argvGet(argv, 'rsvr');
 
-  var   serverassist;
+  var   serverassists     = {};
   var   sendPayload;
   var   sessions          = {};
   var   sessionFlows      = {};
@@ -77,9 +77,9 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       csOptions.sessionId = sessionId;
       const localServerassist = clientStart(csOptions, function(err, config) {
         if (sg.ok(err)) {
-          serverassist = localServerassist;
+          serverassists[sessionId] = localServerassist;
 
-          _.each(serverassist.upstreams, (upstream, key) => {
+          _.each(serverassists[sessionId].upstreams, (upstream, key) => {
             console.log(`  Using upstream: ${sg.lpad(key, 20)} ->> ${upstream}`);
           });
         }
@@ -114,14 +114,14 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       // Clean the message up (clean trailing white-space)
       msg = msg.replace(/[\n\t ]+$/g, '');
 
-      verbose(3, `UDP Message from ${rinfo.address}:${rinfo.port}: |${msg}|`);
-
       // See if this is the right format m[1] === 'p159'; m[2] === {"who":"snmp","when":123,...}
       const m = /^(\S+)\s+(.*)$/.exec(msg);
       if (m && m[2] && (payload = sg.safeJSONParse(m[2], null))) {
 
         // Make sure there is a sessionId
         sessionId = sg.extract(payload, 'sessionId') || sessions[niceSocket];
+
+        showPayload(rinfo, payload);
 
         return sg.__run([function(next) {
           if (!isNewSession) { return next(); }
@@ -157,7 +157,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
     sendPayload = function(body, rinfo, callback_) {
       var callback = callback_ || function(){};
 
-      verbose(3, `From ${rinfo.address}:${rinfo.port}`, body);
+      verbose(4, `From ${rinfo.address}:${rinfo.port}`, body);
 
       if (!body || !body.payload)           { return callback(sg.toError('ENOPAYLOAD')); }
 
@@ -170,7 +170,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       sessionFlow.push(payload);
 
       // ---------- If we do not have an uploader, do not bother, yet ----------
-      if (!serverassist) { return callback(sg.toError('ENOUPSTREAM')); }
+      if (!serverassists[sessionId]) { return callback(sg.toError('ENOUPSTREAM')); }
 
 
 
@@ -202,7 +202,7 @@ var udp2DbgTelemetry = function(argv, context, callback) {
             });
           });
         } else {
-          verbose(3, `fizzle ${sessionId}, count: ${sessionFlows[sessionId].length}`);
+          verbose(4, `fizzle ${sessionId}, count: ${sessionFlows[sessionId].length}`);
         }
       }
     };
@@ -219,8 +219,8 @@ var udp2DbgTelemetry = function(argv, context, callback) {
       if (sessionFlow) {
         body.payload = sessionFlow;
 
-        return serverassist.POST(service, '/upload/', /*query=*/ {}, body, function(err, result) {
-          verbose(2, `Uploading from ${whichOne} sessionFlow ${sessionId}, length: ${sessionFlow.length}, ${_.keys(body)}, ${err}`);
+        return serverassists[sessionId].POST(service, '/upload/', /*query=*/ {}, body, function(err, result) {
+          logit(`Uploading-(${sg.pad(whichOne,7)})`, sg.pad(''+sessionFlow.length,6), `${sessionId.substr(0,8)}...-${_.last(sessionId.split('-'))}`, err, result);
           if (err)  { return callback(err); }
 
           return callback(null, result);
@@ -250,5 +250,23 @@ _.each(lib, (value, key) => {
 });
 
 if (sg.callMain(ARGV, __filename)) {
-  udp2DbgTelemetry(ARGV.getParams({}), {}, function(){});
+  main(ARGV.getParams({}));
 }
+
+function showPayload(rinfo, payload_) {
+  var   payload = sg.deepCopy(payload_);
+  const who     = sg.extract(payload, 'who');
+  const when    = sg.extract(payload, 'when');
+
+  verbose(4, `UDP Message from ${rinfo.port}: ${sg.pad(who, 16)}@ ${when} |${JSON.stringify(payload)}|`);
+}
+
+function logit() {
+  var msg = _.map(arguments, arg => {
+    if (_.isString(arg)) { return arg; }
+    return sg.inspect(arg);
+  });
+
+  console.log(msg.join(', '));
+}
+

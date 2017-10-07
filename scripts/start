@@ -3,9 +3,9 @@
 eval "$(cli-shezargs $@)"
 
 cd $script_dir/..
-pm2 start attr-man.js --watch -- --vverbose --main
+#pm2 start attr-man.js --watch -- --vverbose --main
 pm2 start udp-json.js --watch -- --vverbose --main
 
-cd $script_dir/../../server-assist-server/webtier
-pm2 start webtier.js --watch -- --vverbose --main
-  
+#cd $script_dir/../../server-assist-server/webtier
+#pm2 start webtier.js --watch -- --vverbose --main
+

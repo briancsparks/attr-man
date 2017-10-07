@@ -3,5 +3,6 @@
 eval "$(cli-shezargs $@)"
 
 pm2 delete udp-json
-pm2 delete attr-man
-pm2 delete webtier
+pm2 delete attr-man || true
+pm2 delete webtier  || true
+
